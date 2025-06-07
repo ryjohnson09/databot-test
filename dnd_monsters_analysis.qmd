@@ -1,0 +1,206 @@
+
+---
+title: "D&D Monsters Analysis: Challenge Ratings and Type Distribution"
+author: "Data Analysis Report"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: default
+---
+
+::: {.callout-note}
+This report was generated using artificial intelligence (Claude from Anthropic) under general human direction. At the time of generation, the contents have not been comprehensively reviewed by a human analyst.
+
+<!--
+To indicate human review: Delete the line above about contents not being reviewed, and replace this comment with:
+The contents have been reviewed and validated by [Your Name], [Your Role] on [Date].
+-->
+:::
+
+```{r setup, message=FALSE}
+# Load required libraries
+library(tidyverse)
+library(ggplot2)
+
+# Load the monsters dataset
+monsters <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-05-27/monsters.csv', 
+                           show_col_types = FALSE)
+```
+
+## Introduction
+
+This report analyzes a dataset of Dungeons & Dragons monsters, examining the distribution of monster types and their challenge ratings. The dataset contains `r nrow(monsters)` different creatures with `r ncol(monsters)` attributes each, providing insights into game balance and encounter design.
+
+The analysis focuses on understanding:
+- The composition of monster types in the dataset
+- How challenge ratings vary across different creature types
+- Patterns that might inform game masters about encounter planning
+
+## Data Overview
+
+```{r data-overview}
+# Display basic dataset information
+glimpse(monsters)
+```
+
+The dataset includes `r nrow(monsters)` monsters with comprehensive game statistics including:
+
+- **Identification**: name, category, type, size
+- **Combat attributes**: challenge rating (CR), armor class, hit points, ability scores
+- **Special features**: resistances, immunities, skills, gear
+
+```{r data-summary}
+# Check for missing values in key columns
+monsters |>
+  summarise(
+    total_monsters = n(),
+    missing_type = sum(is.na(type)),
+    missing_cr = sum(is.na(cr)),
+    missing_size = sum(is.na(size))
+  )
+```
+
+## Monster Type Analysis
+
+### Distribution of Monster Types
+
+```{r type-distribution}
+# Most common monster types
+type_counts <- monsters |> 
+  count(type, sort = TRUE)
+
+type_counts |> head(10)
+```
+
+The dataset is dominated by **Beasts** (`r type_counts$n[type_counts$type == "Beast"]` creatures), followed by **Dragons** (`r type_counts$n[type_counts$type == "Dragon"]` creatures) and **Monstrosities** (`r type_counts$n[type_counts$type == "Monstrosity"]` creatures).
+
+```{r type-visualization, fig.width=10, fig.height=6}
+# Visualize monster type distribution
+monsters |>
+  count(type, sort = TRUE) |>
+  head(10) |>
+  ggplot(aes(x = reorder(type, n), y = n, fill = type)) +
+  geom_col(alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = "Distribution of Monster Types",
+    subtitle = "Top 10 most common creature types in the dataset",
+    x = "Monster Type",
+    y = "Number of Creatures",
+    caption = "Data: D&D Monsters Dataset"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_viridis_d()
+```
+
+### Category Analysis
+
+```{r category-analysis}
+# Most common monster categories (more specific groupings)
+monsters |> 
+  count(category, sort = TRUE) |>
+  head(10)
+```
+
+The category classification provides more granular groupings, with **Animals** being the largest single category, followed by various dragon subtypes (Black, Blue, Brass, etc.).
+
+## Challenge Rating Analysis
+
+### Challenge Rating Distribution by Type
+
+```{r cr-by-type-summary}
+# Summary statistics of challenge rating by monster type
+cr_summary <- monsters |>
+  group_by(type) |>
+  summarise(
+    count = n(),
+    min_cr = min(cr, na.rm = TRUE),
+    max_cr = max(cr, na.rm = TRUE),
+    mean_cr = round(mean(cr, na.rm = TRUE), 2),
+    median_cr = median(cr, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(desc(count))
+
+cr_summary
+```
+
+### Challenge Rating Patterns
+
+```{r cr-visualization, fig.width=12, fig.height=8}
+# Create a boxplot showing CR distribution by monster type
+monsters |>
+  # Focus on the most common types for clarity
+  filter(type %in% c("Beast", "Dragon", "Monstrosity", "Fiend", "Humanoid", "Undead", "Elemental", "Fey")) |>
+  ggplot(aes(x = reorder(type, cr, median), y = cr, fill = type)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.5, size = 1) +
+  labs(
+    title = "Challenge Rating Distribution by Monster Type",
+    subtitle = "Most common monster types (15+ creatures each)",
+    x = "Monster Type",
+    y = "Challenge Rating",
+    fill = "Type",
+    caption = "Points show individual monsters; boxes show quartiles"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  ) +
+  scale_fill_viridis_d()
+```
+
+### Highest Challenge Rating Creatures
+
+```{r highest-cr-creatures}
+# Highest CR monsters from each type
+highest_cr <- monsters |>
+  group_by(type) |>
+  filter(cr == max(cr)) |>
+  select(name, type, cr, size) |>
+  arrange(desc(cr)) |>
+  head(10)
+
+highest_cr
+```
+
+The most challenging creature in the dataset is the **`r highest_cr$name[1]`** with a challenge rating of `r highest_cr$cr[1]`.
+
+## Key Findings
+
+### 1. Monster Type Distribution
+- **Beasts dominate** the dataset with `r type_counts$n[type_counts$type == "Beast"]` creatures (`r round(100 * type_counts$n[type_counts$type == "Beast"] / nrow(monsters), 1)`% of all monsters)
+- **Dragons** form the second-largest group with `r type_counts$n[type_counts$type == "Dragon"]` creatures
+- The dataset includes `r nrow(type_counts)` distinct monster types
+
+### 2. Challenge Rating Patterns
+- **Dragons have the highest average difficulty**: Mean CR of `r cr_summary$mean_cr[cr_summary$type == "Dragon"]`, median CR of `r cr_summary$median_cr[cr_summary$type == "Dragon"]`
+- **Beasts are predominantly low-level**: Mean CR of `r cr_summary$mean_cr[cr_summary$type == "Beast"]`, median CR of `r cr_summary$median_cr[cr_summary$type == "Beast"]`
+- **Clear difficulty tiers emerge**:
+  - Low-threat: Beasts (median `r cr_summary$median_cr[cr_summary$type == "Beast"]`), Fey (median `r cr_summary$median_cr[cr_summary$type == "Fey"]`)
+  - Mid-threat: Humanoids (median `r cr_summary$median_cr[cr_summary$type == "Humanoid"]`), Undead (median `r cr_summary$median_cr[cr_summary$type == "Undead"]`)
+  - High-threat: Dragons (median `r cr_summary$median_cr[cr_summary$type == "Dragon"]`), Fiends (median `r cr_summary$median_cr[cr_summary$type == "Fiend"]`)
+
+### 3. Notable Outliers
+- **`r highest_cr$name[1]`** (`r highest_cr$type[1]`) represents the ultimate challenge at CR `r highest_cr$cr[1]`
+- **Humanoids** can reach surprisingly high levels (max CR `r cr_summary$max_cr[cr_summary$type == "Humanoid"]`)
+- **Monstrosities** show the widest range (CR `r cr_summary$min_cr[cr_summary$type == "Monstrosity"]` to `r cr_summary$max_cr[cr_summary$type == "Monstrosity"]`)
+
+## Conclusion
+
+This analysis reveals clear patterns in D&D monster design:
+
+1. **Encounter Variety**: The dominance of Beasts provides numerous low-level encounter options for new adventures
+2. **Scaling Difficulty**: Dragons consistently provide high-level challenges, making them ideal for climactic encounters
+3. **Type Diversity**: Each monster type occupies a distinct niche in the difficulty spectrum, supporting varied gameplay experiences
+
+These patterns suggest thoughtful game design that provides appropriate challenges across all player levels, with clear expectations for encounter difficulty based on creature type.
+
+---
+
+*Analysis completed on `r Sys.Date()` using R `r R.version.string`*
